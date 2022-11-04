@@ -6,7 +6,7 @@
 // All rights reserved.
 //
 
-package module
+package binary
 
 import (
 	"os"

@@ -6,7 +6,9 @@
 // All rights reserved.
 //
 
-package module
+// Package binary implements the WebAsembly binary encoding and
+// decoding.
+package binary
 
 import (
 	"fmt"
