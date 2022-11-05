@@ -14,6 +14,8 @@ import (
 	"fmt"
 	"io"
 	"math"
+
+	"github.com/markkurossi/wasm/module"
 )
 
 // DecodeBinary decodes module from binary encoding.
@@ -32,6 +34,8 @@ func DecodeBinary(data io.Reader) error {
 	}
 	fmt.Printf("version: %08x\n", version)
 
+	m := module.New()
+
 	// Read sections.
 	for {
 		b, err := in.ReadByte()
@@ -48,15 +52,9 @@ func DecodeBinary(data io.Reader) error {
 			return err
 		}
 
-		section, err := in.decodeSection(id, int64(size))
+		err = in.decodeSection(m, id, int64(size))
 		if err != nil {
 			return err
-		}
-
-		if section.ID == SectionCustom {
-			fmt.Printf("section '%v':\n%s", section.ID, hex.Dump(section.Data))
-		} else {
-			fmt.Printf("section '%v': size=%v\n", id, size)
 		}
 	}
 
@@ -165,9 +163,11 @@ func (d *Decoder) Name() (string, error) {
 	return string(buf), nil
 }
 
-func (d *Decoder) decodeSection(id SectionID, size int64) (*Section, error) {
+func (d *Decoder) decodeSection(m *module.Module, id SectionID,
+	size int64) error {
+
 	if size > d.Avail() {
-		return nil, fmt.Errorf("malformed section, need %v bytes, got %v",
+		return fmt.Errorf("malformed section, need %v bytes, got %v",
 			size, d.Avail())
 	}
 
@@ -178,20 +178,20 @@ func (d *Decoder) decodeSection(id SectionID, size int64) (*Section, error) {
 	case SectionCustom:
 		name, err := d.Name()
 		if err != nil {
-			return nil, err
+			return err
 		}
 		switch name {
 		case "target_features":
-			return d.decodeCustomSectionTargetFeatures()
+			return d.decodeCustomSectionTargetFeatures(m)
 
 		case "name":
-			return d.decodeCustomSectionName()
+			return d.decodeCustomSectionName(m)
 
 		case "producers":
-			return d.decodeCustomSectionProducers()
+			return d.decodeCustomSectionProducers(m)
 
 		default:
-			return nil, fmt.Errorf("unsupported custom section %v", name)
+			return fmt.Errorf("unsupported custom section %v", name)
 		}
 
 	case SectionType, SectionImport, SectionFunction, SectionTable,
@@ -199,96 +199,88 @@ func (d *Decoder) decodeSection(id SectionID, size int64) (*Section, error) {
 		SectionElement, SectionCode, SectionData, SectionDataCount:
 		data, err := io.ReadAll(d.in.in)
 		if err != nil {
-			return nil, err
+			return err
 		}
-		return &Section{
-			ID:   id,
-			Data: data,
-		}, nil
+		if false {
+			fmt.Printf("section %s:\n%s", id, hex.Dump(data))
+		}
+		return nil
 
 	default:
 		_, err := io.Copy(io.Discard, d.in.in)
 		if err != nil {
-			return nil, err
+			return err
 		}
-		return nil, fmt.Errorf("unknown section: %v", id)
+		return fmt.Errorf("unknown section: %v", id)
 	}
 
 }
 
-func (d *Decoder) decodeCustomSectionTargetFeatures() (*Section, error) {
+func (d *Decoder) decodeCustomSectionTargetFeatures(m *module.Module) error {
 	fmt.Printf("Target Fetures:\n")
 	count, err := d.LEB128u32()
 	if err != nil {
-		return nil, err
+		return err
 	}
 	for i := 0; i < int(count); i++ {
 		prefix, err := d.ReadByte()
 		if err != nil {
-			return nil, err
+			return err
 		}
 		feature, err := d.Name()
 		if err != nil {
-			return nil, err
+			return err
 		}
 		fmt.Printf("  %c%v\n", prefix, feature)
 	}
-
-	data, err := io.ReadAll(d.in.in)
-	if err != nil {
-		return nil, err
-	}
-	return &Section{
-		ID:   SectionCustom,
-		Data: data,
-	}, nil
+	return nil
 }
 
-func (d *Decoder) decodeCustomSectionName() (*Section, error) {
+func (d *Decoder) decodeCustomSectionName(m *module.Module) error {
 	data, err := io.ReadAll(d.in.in)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return &Section{
-		ID:   SectionCustom,
-		Data: data,
-	}, nil
+	fmt.Printf("section custom name:\n%s", hex.Dump(data))
+	return nil
 }
 
-func (d *Decoder) decodeCustomSectionProducers() (*Section, error) {
-	fmt.Printf("Producers:\n")
+func (d *Decoder) decodeCustomSectionProducers(m *module.Module) error {
 	count, err := d.LEB128u32()
 	if err != nil {
-		return nil, err
+		return err
 	}
 	for i := 0; i < int(count); i++ {
 		name, err := d.Name()
 		if err != nil {
-			return nil, err
+			return err
 		}
+
+		producer := module.Producer{
+			Name: name,
+		}
+
 		nValues, err := d.LEB128u32()
 		if err != nil {
-			return nil, err
+			return err
 		}
 		for j := 0; j < int(nValues); j++ {
 			value, err := d.Name()
 			if err != nil {
-				return nil, err
+				return err
 			}
 			version, err := d.Name()
 			if err != nil {
-				return nil, err
+				return err
 			}
 
-			fmt.Printf("  %s:\t%s:%s\n", name, value, version)
+			producer.Values = append(producer.Values, module.VersionedName{
+				Name:    value,
+				Version: version,
+			})
 		}
+		m.Producers = append(m.Producers, producer)
 	}
-	data, err := io.ReadAll(d.in.in)
-	if err != nil {
-		return nil, err
-	}
-	return &Section{
-		ID:   SectionCustom,
-		Data: data,
-	}, nil
+	fmt.Printf("Producers: %v\n", m.Producers)
+	return nil
 }
