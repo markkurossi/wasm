@@ -181,14 +181,14 @@ func (d *Decoder) decodeSection(m *module.Module, id SectionID,
 			return err
 		}
 		switch name {
-		case "target_features":
-			return d.decodeCustomSectionTargetFeatures(m)
-
 		case "name":
 			return d.decodeCustomSectionName(m)
 
 		case "producers":
 			return d.decodeCustomSectionProducers(m)
+
+		case "target_features":
+			return d.decodeCustomSectionTargetFeatures(m)
 
 		default:
 			return fmt.Errorf("unsupported custom section %v", name)
@@ -214,26 +214,6 @@ func (d *Decoder) decodeSection(m *module.Module, id SectionID,
 		return fmt.Errorf("unknown section: %v", id)
 	}
 
-}
-
-func (d *Decoder) decodeCustomSectionTargetFeatures(m *module.Module) error {
-	fmt.Printf("Target Fetures:\n")
-	count, err := d.LEB128u32()
-	if err != nil {
-		return err
-	}
-	for i := 0; i < int(count); i++ {
-		prefix, err := d.ReadByte()
-		if err != nil {
-			return err
-		}
-		feature, err := d.Name()
-		if err != nil {
-			return err
-		}
-		fmt.Printf("  %c%v\n", prefix, feature)
-	}
-	return nil
 }
 
 func (d *Decoder) decodeCustomSectionName(m *module.Module) error {
@@ -282,5 +262,28 @@ func (d *Decoder) decodeCustomSectionProducers(m *module.Module) error {
 		m.Producers = append(m.Producers, producer)
 	}
 	fmt.Printf("Producers: %v\n", m.Producers)
+	return nil
+}
+
+func (d *Decoder) decodeCustomSectionTargetFeatures(m *module.Module) error {
+	count, err := d.LEB128u32()
+	if err != nil {
+		return err
+	}
+	for i := 0; i < int(count); i++ {
+		prefix, err := d.ReadByte()
+		if err != nil {
+			return err
+		}
+		name, err := d.Name()
+		if err != nil {
+			return err
+		}
+		m.TargetFeatures = append(m.TargetFeatures, module.Feature{
+			Prefix: prefix,
+			Name:   name,
+		})
+	}
+	fmt.Printf("Target Fetures: %v\n", m.TargetFeatures)
 	return nil
 }
