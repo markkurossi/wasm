@@ -217,12 +217,73 @@ func (d *Decoder) decodeSection(m *module.Module, id SectionID,
 }
 
 func (d *Decoder) decodeCustomSectionName(m *module.Module) error {
-	data, err := io.ReadAll(d.in.in)
-	if err != nil {
-		return err
+	for {
+		b, err := d.ReadByte()
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return err
+		}
+		id := NameID(b)
+		size, err := d.LEB128u32()
+		if err != nil {
+			return err
+		}
+		switch id {
+		case FunctionNames:
+			m.Names.Functions, err = d.parseNameMap()
+			if err != nil {
+				return err
+			}
+
+		case GlobalNames:
+			m.Names.Globals, err = d.parseNameMap()
+			if err != nil {
+				return err
+			}
+
+		case DataSegmentNames:
+			m.Names.DataSegments, err = d.parseNameMap()
+			if err != nil {
+				return err
+			}
+
+		default:
+			fmt.Printf("section custom %v: len=%v\n", id, size)
+			for i := 0; i < int(size); i++ {
+				_, err = d.ReadByte()
+				if err != nil {
+					return err
+				}
+			}
+		}
 	}
-	fmt.Printf("section custom name:\n%s", hex.Dump(data))
 	return nil
+}
+
+func (d *Decoder) parseNameMap() (module.NameMap, error) {
+	count, err := d.LEB128u32()
+	if err != nil {
+		return nil, err
+	}
+
+	var result module.NameMap
+	for i := 0; i < int(count); i++ {
+		idx, err := d.LEB128u32()
+		if err != nil {
+			return nil, err
+		}
+		name, err := d.Name()
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, module.NameAssoc{
+			Idx:  idx,
+			Name: name,
+		})
+	}
+	return result, nil
 }
 
 func (d *Decoder) decodeCustomSectionProducers(m *module.Module) error {

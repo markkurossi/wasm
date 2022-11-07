@@ -63,3 +63,41 @@ func (id SectionID) String() string {
 	}
 	return fmt.Sprintf("{section %v}", byte(id))
 }
+
+// NameID defines name section IDs.
+type NameID byte
+
+// Known name IDs.
+const (
+	ModuleName NameID = iota
+	FunctionNames
+	LocalNames
+	LabelNames
+	TypeNames
+	TableNames
+	MemoryNames
+	GlobalNames
+	ElemSegmentNames
+	DataSegmentNames
+)
+
+var nameNames = map[NameID]string{
+	ModuleName:       "ModuleName",
+	FunctionNames:    "FunctionNames",
+	LocalNames:       "LocalNames",
+	LabelNames:       "LabelNames",
+	TypeNames:        "TypeNames",
+	TableNames:       "TableNames",
+	MemoryNames:      "MemoryNames",
+	GlobalNames:      "GlobalNames",
+	ElemSegmentNames: "ElemSegmentNames",
+	DataSegmentNames: "DataSegmentNames",
+}
+
+func (id NameID) String() string {
+	name, ok := nameNames[id]
+	if ok {
+		return name
+	}
+	return fmt.Sprintf("{NameID %v}", byte(id))
+}

@@ -20,8 +20,32 @@ func New() *Module {
 
 // Module implements a WebAssembly module.
 type Module struct {
+	Names struct {
+		Module       string
+		Functions    NameMap
+		Globals      NameMap
+		DataSegments NameMap
+	}
 	Producers      []Producer
 	TargetFeatures []Feature
+}
+
+// NameMap defines a mappings from names to indices in the given index
+// space.
+type NameMap []NameAssoc
+
+func (nmap NameMap) String() string {
+	result := "{\n"
+	for _, assoc := range nmap {
+		result += fmt.Sprintf("  %v\t%v\n", assoc.Idx, assoc.Name)
+	}
+	return result + "}"
+}
+
+// NameAssoc defines a name index mapping.
+type NameAssoc struct {
+	Idx  uint32
+	Name string
 }
 
 // Producer defines a tool that produced this module.
